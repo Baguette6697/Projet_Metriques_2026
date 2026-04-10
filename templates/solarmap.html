@@ -1,0 +1,314 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Rayonnement Solaire Direct — France</title>
+  <script type="text/javascript" src="https://www.gstatic.com/charts/loader.js"></script>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: 'Segoe UI', Arial, sans-serif;
+      background: linear-gradient(135deg, #0f1b2d 0%, #1a2e45 100%);
+      min-height: 100vh;
+      color: #e8f4fd;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      padding: 30px 20px;
+    }
+
+    header {
+      text-align: center;
+      margin-bottom: 28px;
+    }
+
+    header h1 {
+      font-size: 1.9rem;
+      font-weight: 700;
+      letter-spacing: 0.5px;
+      color: #ffd166;
+    }
+
+    header p {
+      margin-top: 6px;
+      font-size: 0.92rem;
+      color: #a8c8e8;
+    }
+
+    #loading {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 14px;
+      margin: 40px 0;
+    }
+
+    .spinner {
+      width: 48px; height: 48px;
+      border: 5px solid rgba(255,209,102,0.2);
+      border-top-color: #ffd166;
+      border-radius: 50%;
+      animation: spin 0.9s linear infinite;
+    }
+
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    #loading p { color: #a8c8e8; font-size: 0.95rem; }
+
+    #error-msg {
+      display: none;
+      background: rgba(220,53,69,0.15);
+      border: 1px solid rgba(220,53,69,0.5);
+      border-radius: 10px;
+      padding: 16px 24px;
+      color: #f8a5ae;
+      max-width: 500px;
+      text-align: center;
+    }
+
+    #chart-container {
+      display: none;
+      background: rgba(255,255,255,0.05);
+      border-radius: 16px;
+      border: 1px solid rgba(255,255,255,0.1);
+      padding: 20px;
+      width: 100%;
+      max-width: 860px;
+      box-shadow: 0 8px 32px rgba(0,0,0,0.4);
+    }
+
+    #map_div { width: 100%; height: 520px; }
+
+    .legend {
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      gap: 8px;
+      margin-top: 18px;
+      flex-wrap: wrap;
+    }
+
+    .legend-label { font-size: 0.78rem; color: #a8c8e8; }
+
+    .legend-bar {
+      height: 14px;
+      width: 220px;
+      border-radius: 7px;
+      background: linear-gradient(to right, #cce5ff, #0077cc, #ff9800, #e53935);
+    }
+
+    #stats-grid {
+      display: none;
+      grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+      gap: 14px;
+      margin-top: 24px;
+      width: 100%;
+      max-width: 860px;
+    }
+
+    .stat-card {
+      background: rgba(255,255,255,0.06);
+      border-radius: 12px;
+      border: 1px solid rgba(255,255,255,0.1);
+      padding: 14px 16px;
+      text-align: center;
+    }
+
+    .stat-card .value {
+      font-size: 1.5rem;
+      font-weight: 700;
+      color: #ffd166;
+    }
+
+    .stat-card .label {
+      font-size: 0.78rem;
+      color: #a8c8e8;
+      margin-top: 4px;
+    }
+
+    footer {
+      margin-top: 30px;
+      font-size: 0.75rem;
+      color: #5a7a99;
+      text-align: center;
+    }
+  </style>
+</head>
+<body>
+
+  <header>
+    <h1>☀️ Rayonnement Solaire Direct — France</h1>
+    <p>Moyenne sur 7 jours · Données Open-Meteo · <span id="date-range"></span></p>
+  </header>
+
+  <div id="loading">
+    <div class="spinner"></div>
+    <p>Récupération des données météo…</p>
+  </div>
+
+  <div id="error-msg"></div>
+
+  <div id="chart-container">
+    <div id="map_div"></div>
+    <div class="legend">
+      <span class="legend-label">Faible</span>
+      <div class="legend-bar"></div>
+      <span class="legend-label">Élevé</span>
+    </div>
+  </div>
+
+  <div id="stats-grid">
+    <div class="stat-card">
+      <div class="value" id="stat-max">—</div>
+      <div class="label">Maximum (MJ/m²)</div>
+    </div>
+    <div class="stat-card">
+      <div class="value" id="stat-min">—</div>
+      <div class="label">Minimum (MJ/m²)</div>
+    </div>
+    <div class="stat-card">
+      <div class="value" id="stat-avg">—</div>
+      <div class="label">Moyenne nationale</div>
+    </div>
+    <div class="stat-card">
+      <div class="value" id="stat-top">—</div>
+      <div class="label">Ville la plus ensoleillée</div>
+    </div>
+  </div>
+
+  <footer>Source : <a href="https://open-meteo.com" style="color:#5a7a99;">Open-Meteo</a> · Visualisation Google Charts</footer>
+
+<script type="text/javascript">
+
+  // ── 20 representative French cities ───────────────────────────────────────
+  const CITIES = [
+    { name: "Paris",        lat: 48.8566,  lon:  2.3522 },
+    { name: "Lyon",         lat: 45.7640,  lon:  4.8357 },
+    { name: "Marseille",    lat: 43.2965,  lon:  5.3698 },
+    { name: "Toulouse",     lat: 43.6047,  lon:  1.4442 },
+    { name: "Bordeaux",     lat: 44.8378,  lon: -0.5792 },
+    { name: "Nantes",       lat: 47.2184,  lon: -1.5536 },
+    { name: "Strasbourg",   lat: 48.5734,  lon:  7.7521 },
+    { name: "Lille",        lat: 50.6292,  lon:  3.0573 },
+    { name: "Nice",         lat: 43.7102,  lon:  7.2620 },
+    { name: "Rennes",       lat: 48.1173,  lon: -1.6778 },
+    { name: "Montpellier",  lat: 43.6108,  lon:  3.8767 },
+    { name: "Grenoble",     lat: 45.1885,  lon:  5.7245 },
+    { name: "Dijon",        lat: 47.3220,  lon:  5.0415 },
+    { name: "Clermont-Fd",  lat: 45.7797,  lon:  3.0863 },
+    { name: "Le Havre",     lat: 49.4938,  lon:  0.1077 },
+    { name: "Brest",        lat: 48.3904,  lon: -4.4861 },
+    { name: "Perpignan",    lat: 42.6887,  lon:  2.8948 },
+    { name: "Metz",         lat: 49.1193,  lon:  6.1727 },
+    { name: "Ajaccio",      lat: 41.9192,  lon:  8.7386 },
+    { name: "Limoges",      lat: 45.8354,  lon:  1.2644 },
+  ];
+
+  // ── Fetch radiation data for one city ─────────────────────────────────────
+  async function fetchCity(city) {
+    const url =
+      `https://api.open-meteo.com/v1/forecast` +
+      `?latitude=${city.lat}&longitude=${city.lon}` +
+      `&daily=direct_radiation_sum` +
+      `&timezone=Europe%2FParis` +
+      `&forecast_days=7`;
+
+    const res  = await fetch(url);
+    const data = await res.json();
+    const vals = data?.daily?.direct_radiation_sum ?? [];
+    // Convert MJ/m² (already in that unit from Open-Meteo) — average over available days
+    const valid = vals.filter(v => v !== null);
+    const avg   = valid.length ? valid.reduce((a, b) => a + b, 0) / valid.length : 0;
+    return { ...city, avg: Math.round(avg * 10) / 10, dates: data?.daily?.time ?? [] };
+  }
+
+  // ── Build Google GeoChart once all data is ready ───────────────────────────
+  google.charts.load('current', { packages: ['geochart'] });
+
+  async function init() {
+    try {
+      const results = await Promise.all(CITIES.map(fetchCity));
+
+      // Date range label
+      const allDates = results.flatMap(r => r.dates);
+      if (allDates.length) {
+        const sorted = [...new Set(allDates)].sort();
+        document.getElementById('date-range').textContent =
+          `${sorted[0]} → ${sorted[sorted.length - 1]}`;
+      }
+
+      // Stats
+      const avgs   = results.map(r => r.avg);
+      const maxVal = Math.max(...avgs);
+      const minVal = Math.min(...avgs);
+      const mean   = Math.round((avgs.reduce((a, b) => a + b, 0) / avgs.length) * 10) / 10;
+      const topCity = results.find(r => r.avg === maxVal);
+
+      document.getElementById('stat-max').textContent  = maxVal;
+      document.getElementById('stat-min').textContent  = minVal;
+      document.getElementById('stat-avg').textContent  = mean;
+      document.getElementById('stat-top').textContent  = topCity.name;
+
+      google.charts.setOnLoadCallback(() => drawChart(results, minVal, maxVal));
+
+    } catch (err) {
+      document.getElementById('loading').style.display  = 'none';
+      const el = document.getElementById('error-msg');
+      el.style.display = 'block';
+      el.textContent   = `Erreur lors de la récupération des données : ${err.message}`;
+    }
+  }
+
+  function drawChart(results, minVal, maxVal) {
+    document.getElementById('loading').style.display       = 'none';
+    document.getElementById('chart-container').style.display = 'block';
+    document.getElementById('stats-grid').style.display     = 'grid';
+
+    const dataTable = new google.visualization.DataTable();
+    dataTable.addColumn('number', 'Latitude');
+    dataTable.addColumn('number', 'Longitude');
+    dataTable.addColumn('number', 'Rayonnement moyen (MJ/m²)');
+    dataTable.addColumn({ type: 'string', role: 'tooltip', p: { html: true } });
+
+    results.forEach(r => {
+      const tooltip =
+        `<div style="padding:10px 14px;font-family:sans-serif;font-size:13px;">` +
+        `<strong style="color:#0077cc;">${r.name}</strong><br/>` +
+        `Rayonnement direct moyen : <strong>${r.avg} MJ/m²</strong>` +
+        `</div>`;
+      dataTable.addRow([r.lat, r.lon, r.avg, tooltip]);
+    });
+
+    const options = {
+      region:         'FR',
+      displayMode:    'markers',
+      resolution:     'provinces',
+      colorAxis: {
+        minValue: minVal,
+        maxValue: maxVal,
+        colors:   ['#cce5ff', '#0077cc', '#ff9800', '#e53935'],
+      },
+      sizeAxis:      { minValue: minVal, maxValue: maxVal, minSize: 10, maxSize: 28 },
+      backgroundColor: { fill: '#1a2e45', stroke: '#2a4a6a', strokeWidth: 1 },
+      datalessRegionColor: '#1e3550',
+      defaultColor:    '#aaa',
+      legend:          'none',
+      tooltip:         { isHtml: true },
+      magnifyingGlass: { enable: true, zoomFactor: 7 },
+    };
+
+    const chart = new google.visualization.GeoChart(
+      document.getElementById('map_div')
+    );
+    chart.draw(dataTable, options);
+
+    // Redraw on resize
+    window.addEventListener('resize', () => chart.draw(dataTable, options));
+  }
+
+  init();
+</script>
+</body>
+</html>

@@ -38,6 +38,12 @@ def mongraphique():
 def mon_histogramme():
     return render_template("histogram.html")
 
+@app.route("/solarmap")
+def ma_carte():
+    return render_template("solarmap.html")
+
+
+
 # Ne rien mettre après ce commentaire
     
 if __name__ == "__main__":
