@@ -43,7 +43,7 @@ def ma_carte():
     return render_template("solarmap.html")
 
 
-
+#
 # Ne rien mettre après ce commentaire
     
 if __name__ == "__main__":
